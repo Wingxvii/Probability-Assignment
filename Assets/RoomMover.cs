@@ -123,22 +123,25 @@ public class RoomMover : MonoBehaviour
 
             while (probfract >= doorPercentRatio)
             {
-                Debug.Log(probfract + " - " + doorPercentRatio);
                 probfract -= doorPercentRatio;
                 doors.Add(entry.Key);
             }
 
+            //WTF why is double not precise? I thought that was the whole point??????? you better fix it billy
+            probfract = Mathf.Round(((float)probfract) * 100f) / 100f;
             //update tempProb for use in flushing
-            Debug.Log("Adding " + probfract);
-            tempProb[entry.Key] = probfract;
-            probDebug.Add(probfract);
+            tempProb[entry.Key] = (double)probfract;
+            probDebug.Add((double)probfract);
         }
 
         //flush remainder door probabilities until door count is full
         while (doors.Count < allrooms.Count)
         {
             //update probabilities
-            doors.Add(RandWeightedItem(tempProb));
+            DoorType toAdd = RandWeightedItem(tempProb);
+            doors.Add(toAdd);
+            //zero for the future
+            tempProb[toAdd] = 0.0;
         }
 
         //handle probability not summing to expected 1
@@ -173,7 +176,8 @@ public class RoomMover : MonoBehaviour
         }
 
         //pick
-        double selectedValue = Random.Range(0, (float)accumulatedWeight);
+        double selectedValue = Random.Range(0f, (float)accumulatedWeight);
+        Debug.Log(selectedValue);
 
         //find
         foreach (KeyValuePair<DoorType, double> entry in prob)
@@ -182,10 +186,8 @@ public class RoomMover : MonoBehaviour
             {
                 selectedValue -= entry.Value;
 
-                if (selectedValue >= 0.0)
+                if (selectedValue <= 0.0)
                 {
-                    //zero probability for future calls
-                    prob[entry.Key] = 0;
                     return entry.Key;
                 }
             }
