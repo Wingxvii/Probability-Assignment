@@ -1,0 +1,9 @@
+Hot	Noisy	Safe Door	Percentage of Doors
+Y	Y	Y	0.05
+Y	Y	N	0.30
+Y	N	Y	0.03
+Y	N	N	0.21
+N	Y	Y	0.06
+N	Y	N	0.11
+N	N	Y	0.20
+N	N	N	0.04

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using System.IO;
 
 public enum DoorType { 
     HotNoisySafe = 0,
@@ -18,6 +19,10 @@ public class RoomMover : MonoBehaviour
     public List<Transform> allrooms = new List<Transform>();
     public GameObject treasurePrefab;
     public GameObject stonePrefab;
+    public string fileName = "Assets/probabilities.txt";
+
+    public List<DoorType> allDoorsDebug;
+    public List<double> probDebug;
 
     // Start is called before the first frame update
     void Start()
@@ -33,25 +38,100 @@ public class RoomMover : MonoBehaviour
 
             iterator++;
         }
+
+        //call setup
+        ParseDoors(fileName);
+    }
+
+    //Parses probabilities from text file and sends to statistics
+    private void ParseDoors(string fileName) {
+        Dictionary<DoorType, double> prob = new Dictionary<DoorType, double>();
+        StreamReader reader = new StreamReader(fileName);
+        
+        //skip first line
+        string line = reader.ReadLine();
+        line = reader.ReadLine();
+
+        while (line != null) {
+            //remove all the whites
+            line = line.Replace("/", string.Empty)
+                .Replace(" ", string.Empty)
+                .Replace("\t", string.Empty);
+
+            string type = line.Substring(0, 3);
+            double value = 0;
+
+            if (!double.TryParse(line.Substring(3), out value))
+            {
+                Debug.LogError("Invalid Parsing: Unexpected Probability value format");
+            }
+
+            //fill dictionary based on doortype
+            switch (type) {
+                case "YYY":
+                    prob.Add(DoorType.HotNoisySafe, value);
+                    break;
+                case "YYN":
+                    prob.Add(DoorType.HotNoisy, value);
+                    break;
+                case "YNY":
+                    prob.Add(DoorType.HotSafe, value);
+                    break;
+                case "YNN":
+                    prob.Add(DoorType.Hot, value);
+                    break;
+                case "NYY":
+                    prob.Add(DoorType.NoisySafe, value);
+                    break;
+                case "NYN":
+                    prob.Add(DoorType.Noisy, value);
+                    break;
+                case "NNY":
+                    prob.Add(DoorType.Safe, value);
+                    break;
+                case "NNN":
+                    prob.Add(DoorType.None, value);
+                    break;
+                default:
+                    Debug.LogError("Invalid Parsing: Unexpected Probability Type format");
+                    break;
+            }
+            line = reader.ReadLine();
+        }
+
+        allDoorsDebug = Statistics(prob);
+    }
+
+    //sets up scene using input door list
+    private void SetupDoors(List<DoorType> allDoors) {
     }
 
     //Returns list of door types calculated from probability dictionary
-    private List<DoorType> Statistics(Dictionary<DoorType, float> prob, float probSum = 1.0f)
+    private List<DoorType> Statistics(Dictionary<DoorType, double> prob, double probSum = 1.0)
     {
         List<DoorType> doors = new List<DoorType>();
 
         //temp prob ensures origin prob stays intact
-        Dictionary<DoorType, float> tempProb = new Dictionary<DoorType, float>();
+        Dictionary<DoorType, double> tempProb = new Dictionary<DoorType, double>(prob);
+
+        double doorPercentRatio = probSum / (double)allrooms.Count;
 
         //loop through all probabilities above door fraction threshold
-        foreach (KeyValuePair<DoorType, float> entry in prob)
+        foreach (KeyValuePair<DoorType, double> entry in prob)
         {
-            tempProb.Add(entry.Key, entry.Value);
-            while (entry.Value >= (probSum / allrooms.Count))
+            double probfract = entry.Value;
+
+            while (probfract >= doorPercentRatio)
             {
-                tempProb[entry.Key] -= allrooms.Count;
+                Debug.Log(probfract + " - " + doorPercentRatio);
+                probfract -= doorPercentRatio;
                 doors.Add(entry.Key);
             }
+
+            //update tempProb for use in flushing
+            Debug.Log("Adding " + probfract);
+            tempProb[entry.Key] = probfract;
+            probDebug.Add(probfract);
         }
 
         //flush remainder door probabilities until door count is full
@@ -65,47 +145,46 @@ public class RoomMover : MonoBehaviour
         if (doors.Count > allrooms.Count) {
             Debug.LogWarning("Probability did not sum to 1");
 
-            float actualSum = 0.0f;
+            double actualSum = 0.0;
             //determine actual sum
-            foreach (KeyValuePair<DoorType, float> entry in prob)
+            foreach (KeyValuePair<DoorType, double> entry in prob)
             {
-                while (entry.Value >= (probSum / allrooms.Count))
-                {
-                    actualSum += entry.Value;
-                }
+                actualSum += entry.Value;
             }
 
             return Statistics(prob, actualSum);
         }
-
         return doors;
     }
 
-    private DoorType RandWeightedItem(Dictionary<DoorType, float> prob)
+    //Returns weighted random from a dict list
+    private DoorType RandWeightedItem(Dictionary<DoorType, double> prob)
     {
-        float accumulatedWeight = 0.0f;
+
+        double accumulatedWeight = 0.0;
 
         //accumulate weight
-        foreach (KeyValuePair<DoorType, float> entry in prob)
+        foreach (KeyValuePair<DoorType, double> entry in prob)
         {
-            if (entry.Value > 0.0f)
+            if (entry.Value > 0.0)
             {
                 accumulatedWeight += entry.Value;
             }
         }
 
         //pick
-        float selectedValue = Random.Range(0, accumulatedWeight);
+        double selectedValue = Random.Range(0, (float)accumulatedWeight);
 
         //find
-        foreach (KeyValuePair<DoorType, float> entry in prob)
+        foreach (KeyValuePair<DoorType, double> entry in prob)
         {
-            if (entry.Value > 0.0f)
+            if (entry.Value > 0.0)
             {
                 selectedValue -= entry.Value;
 
-                if (selectedValue >= 0.0f)
+                if (selectedValue >= 0.0)
                 {
+                    //zero probability for future calls
                     prob[entry.Key] = 0;
                     return entry.Key;
                 }
@@ -115,4 +194,6 @@ public class RoomMover : MonoBehaviour
         Debug.LogError("Accumulated Range was unexpected.");
         return DoorType.None;
     }
+
+    
 }
