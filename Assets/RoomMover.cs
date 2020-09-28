@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
-using UnityEngine;
 using System.IO;
-
+using System.Linq;
+using UnityEngine;
 public enum DoorType { 
     HotNoisySafe = 0,
     HotNoisy = 1,
@@ -19,10 +19,14 @@ public class RoomMover : MonoBehaviour
     public List<Transform> allrooms = new List<Transform>();
     public GameObject treasurePrefab;
     public GameObject stonePrefab;
+    public GameObject firePrefab;
+    public GameObject soundPrefab;
+
+    public GameObject sound;
+
     public string fileName = "Assets/probabilities.txt";
 
-    public List<DoorType> allDoorsDebug;
-    public List<double> probDebug;
+    public List<DoorType> allDoors;
 
     // Start is called before the first frame update
     void Start()
@@ -41,6 +45,13 @@ public class RoomMover : MonoBehaviour
 
         //call setup
         ParseDoors(fileName);
+    }
+
+    private void Update()
+    {
+        Debug.Log(sound.GetComponent<AudioSource>().isPlaying);
+        Debug.Log(sound.GetComponent<AudioSource>().isActiveAndEnabled);
+
     }
 
     //Parses probabilities from text file and sends to statistics
@@ -99,11 +110,53 @@ public class RoomMover : MonoBehaviour
             line = reader.ReadLine();
         }
 
-        allDoorsDebug = Statistics(prob);
+        allDoors = Statistics(prob);
+        allDoors = allDoors.OrderBy(x => Random.value).ToList();
+        SetupDoors(allDoors);
     }
 
     //sets up scene using input door list
     private void SetupDoors(List<DoorType> allDoors) {
+        int iterator = 0;
+
+        foreach (DoorType door in allDoors) {
+            Transform doorTransform = allrooms[iterator];
+
+            //check for heat
+            if (door == DoorType.HotNoisySafe ||
+                door == DoorType.HotNoisy ||
+                door == DoorType.HotSafe ||
+                door == DoorType.Hot)
+            {
+                Instantiate(firePrefab, doorTransform.Find("door_wall_A3 (1)").position, doorTransform.rotation);
+            }
+
+            //check for noise
+            if (door == DoorType.HotNoisySafe ||
+                door == DoorType.HotNoisy ||
+                door == DoorType.NoisySafe ||
+                door == DoorType.Noisy)
+            {
+                sound = Instantiate(soundPrefab, doorTransform.position, Quaternion.identity);
+            }
+
+            //check for safety
+            if (door == DoorType.HotNoisySafe ||
+                door == DoorType.NoisySafe ||
+                door == DoorType.HotSafe ||
+                door == DoorType.Safe)
+            {
+                Instantiate(treasurePrefab, doorTransform.Find("floor_A (23)").position, doorTransform.rotation);
+            }
+            //not safe
+            else {
+                Instantiate(stonePrefab, doorTransform.Find("floor_A (23)").position, doorTransform.rotation);
+            }
+
+            iterator++;
+        }
+
+
     }
 
     //Returns list of door types calculated from probability dictionary
@@ -131,7 +184,6 @@ public class RoomMover : MonoBehaviour
             probfract = Mathf.Round(((float)probfract) * 100f) / 100f;
             //update tempProb for use in flushing
             tempProb[entry.Key] = (double)probfract;
-            probDebug.Add((double)probfract);
         }
 
         //flush remainder door probabilities until door count is full
@@ -177,7 +229,6 @@ public class RoomMover : MonoBehaviour
 
         //pick
         double selectedValue = Random.Range(0f, (float)accumulatedWeight);
-        Debug.Log(selectedValue);
 
         //find
         foreach (KeyValuePair<DoorType, double> entry in prob)
